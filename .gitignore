@@ -54,3 +54,7 @@ Thumbs.db
 *.tgz
 
 .wakatime-project
+
+# Python cache
+__pycache__/
+*.py[cod]

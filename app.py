@@ -11,6 +11,7 @@ import imagehash
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from review_popup import ReviewPopup
 
 # FOLDER PATHS
 PUBLISHED_FOLDER = "Published"
@@ -63,56 +64,80 @@ def check_duplicate(new_image_path):
 
     try:
 
-        #Open the new image and create its hash
-        new_image = Image.open(new_image_path)
-        new_hash = imagehash.phash(new_image)
+        # Open new image
+        new_image = Image.open(
+            new_image_path
+        )
+
+        # Create hash
+        new_hash = imagehash.phash(
+            new_image
+        )
 
     except Exception as e:
 
-        print(f"Could not open image: {e}")
-        return
+        print(
+            f"Could not open image: {e}"
+        )
 
-    #Empty list to store potential duplicates that exceed the similarity threshold
+        return None
+
     suspicious_matches = []
 
-    #Compare the new image's hash with each hash in the published database
+    # Compare with published images
     for file_name, old_hash in published_hashes.items():
 
-        #Calculate distance between the new image hash and the existing hash
-        distance = abs(new_hash - old_hash)
+        distance = abs(
+            new_hash - old_hash
+        )
 
-        #Convert the distance to a similarity percentage (0-100), where 100 means identical
         similarity = max(
             0,
             100 - (distance * 6)
         )
 
-        #if x>=60
         if similarity >= SIMILARITY_THRESHOLD:
 
-            suspicious_matches.append(
-                (
-                    file_name,
-                    similarity
-                )
-            )
+            suspicious_matches.append({
 
+                "published_path":
+                os.path.join(
+                    PUBLISHED_FOLDER,
+                    file_name
+                ),
+
+                "published_name":
+                file_name,
+
+                "similarity":
+                similarity
+            })
+
+    # Sort by highest similarity
+    suspicious_matches.sort(
+        key=lambda x:
+        x["similarity"],
+        reverse=True
+    )
+
+    # Return structured result
     if suspicious_matches:
 
-        print("\nSuspicious matches found:")
+        return {
 
-        for match in suspicious_matches:
+            "pending_path":
+            new_image_path,
 
-            print(
-                f"{match[0]} "
-                f"({match[1]}%)"
-            )
+            "pending_name":
+            os.path.basename(
+                new_image_path
+            ),
 
-    else:
+            "matches":
+            suspicious_matches
+        }
 
-        print(
-            "\nNo suspicious duplicates found."
-        )
+    return None
 
 # WATCH PENDING FOLDER
 #This class listens for new files in the pending folder
@@ -146,7 +171,28 @@ class PendingHandler(
 
             time.sleep(1)
 
-            check_duplicate(file_path)
+            result = check_duplicate(
+            file_path
+        )
+
+        if result:
+
+            print(
+                "\nSuspicious duplicate found:"
+            )
+
+            print(
+                result["pending_name"]
+            )
+
+            ReviewPopup([result])
+
+            for match in result["matches"]:
+
+                print(
+                    f'{match["published_name"]}'
+                    f' ({match["similarity"]}%)'
+                )
 
 
 
